@@ -431,6 +431,8 @@ for indexSensingV = 1:Nscheduled
     % if more than 2 retransmission get developed -> this must be changed
     if simParams.resourceReEvaluation == true
         if sum((scheduledID_ReEval==scheduledID(indexSensingV))==1)
+            vehicle = scheduledID(indexSensingV);
+            [timeManagement,stationManagement,sinrManagement] = ADT(timeManagement,vehicle,stationManagement,positionManagement,sinrManagement,appParams,simParams,phyParams,outParams);
             BRtoChange=~ismember(BRidOriginal,bestBR);
             if sum(BRtoChange)==0
                 continue   % exit as both resources are still available
@@ -439,6 +441,7 @@ for indexSensingV = 1:Nscheduled
             elseif BRtoChange(1,2)==0
                 BR=BRidOriginal(1,2);   % maintains second resource
             end
+            continue
         end
     end
 
@@ -451,118 +454,128 @@ for indexSensingV = 1:Nscheduled
     %% From v 5.4.16
     % Executes HARQ allocation if enabled
     if stationManagement.cv2xNumberOfReplicas(scheduledID(indexSensingV)) > 1
-        if phyParams.cv2xNumberOfReplicasMax>1
-            % Check on max number of retransmissions supported
-            if phyParams.cv2xNumberOfReplicasMax>3
-                error('HARQ with more than 1 retransmission not implemented');
+        if phyParams.cv2xNumberOfReplicasMax > 1
+            % 최대 재전송 횟수 확인
+            if phyParams.cv2xNumberOfReplicasMax > 3
+                error('HARQ는 1회 이상 재전송을 지원하지 않습니다');
             end
-
-            if simParams.FDalgorithm==5 || simParams.FDalgorithm==6
-                continue
+            
+            if simParams.FDalgorithm == 5 || simParams.FDalgorithm == 6
+                continue;
             end
-            % INPUT:
-            % currentT is the current subframe in resource grid
-            % bestBR is the set of best resources passed to MAC
-            % BR is the resource selected for the first transmission
-            % THEN: add Nbeacons to all resources before current
-
-            bestSubframe = ceil(bestBR/NbeaconsF);
-            bestSubframe(bestSubframe<=currentT) = bestSubframe(bestSubframe<=currentT) + NbeaconsT;
-            % identify subframe of BR
-            subframe_BR = ceil(BR/NbeaconsF);
-            subframe_BR(subframe_BR<=currentT) = subframe_BR + NbeaconsT;
-            % remove resources in subframe_x
-            bestBR(bestSubframe==subframe_BR) = -1;
-
-            % remove resources before Now+T1
-            bestBR(bestSubframe<currentT+simParams.T1autonomousModeTTIs) = -1;
-
+            
+            % 현재 subframe (currentT)
+            % 최적 자원 세트 (bestBR)
+            % 첫 전송을 위한 선택된 자원 (BR)
+            % 현재 이전의 모든 자원에 Nbeacons를 더함
+            
+            bestSubframe = ceil(bestBR / NbeaconsF);
+            bestSubframe(bestSubframe <= currentT) = bestSubframe(bestSubframe <= currentT) + NbeaconsT;
+            % BR의 subframe 식별
+            subframe_BR = ceil(BR / NbeaconsF);
+            subframe_BR(subframe_BR <= currentT) = subframe_BR + NbeaconsT;
+            % subframe_x에서 자원 제거
+            bestBR(bestSubframe == subframe_BR) = -1;
+            
+            % 현재+T1 이전의 자원 제거
+            bestBR(bestSubframe < currentT + simParams.T1autonomousModeTTIs) = -1;
+            
             if simParams.mode5G == constants.MODE_LTE
-                % remove resources before x-15
-                bestBR(bestSubframe<subframe_BR-15) = -1;
-            else%if simParams.mode5G==constants.MODE_5G
-                % remove resources before x-31
-                bestBR(bestSubframe<subframe_BR-31) = -1;
+                % x-15 이전의 자원 제거
+                bestBR(bestSubframe < subframe_BR - 15) = -1;
+            else % if simParams.mode5G == constants.MODE_5G
+                % x-31 이전의 자원 제거
+                bestBR(bestSubframe < subframe_BR - 31) = -1;
             end
-
-            % remove resources after Now+T2
+            
+            % 현재+T2 이후의 자원 제거
             if simParams.Priority_SPS == true
-                bestBR(bestSubframe>currentT+simParams.T2autonomousModeTTIs_min) = -1;
+                bestBR(bestSubframe > currentT + simParams.T2autonomousModeTTIs_min) = -1;
             else
-                bestBR(bestSubframe>currentT+simParams.T2autonomousModeTTIs) = -1;
+                bestBR(bestSubframe > currentT + simParams.T2autonomousModeTTIs) = -1;
             end
-
-            if simParams.mode5G==constants.MODE_LTE
-                % remove resources after x+15
-                bestBR(bestSubframe>subframe_BR+15) = -1;
-            else% if simParams.mode5G==constants.MODE_5G
-                % remove resources after x+31
-                bestBR(bestSubframe>subframe_BR+31) = -1;
+            
+            if simParams.mode5G == constants.MODE_LTE
+                % x+15 이후의 자원 제거
+                bestBR(bestSubframe > subframe_BR + 15) = -1;
+            else % if simParams.mode5G == constants.MODE_5G
+                % x+31 이후의 자원 제거
+                bestBR(bestSubframe > subframe_BR + 31) = -1;
             end
-
-
-            bestBR(bestBR==-1) = [];
-
-            if length(bestBR)>1
-                % Reassign, selecting a random BR among the remaining bestBR
+            
+            bestBR(bestBR == -1) = [];
+            
+            if length(bestBR) > 1
+                % 남은 bestBR 중 임의의 BR 선택
                 BRindex2 = randi(length(bestBR));
                 BR2 = bestBR(BRindex2);
-                % In case, BR and BR2 might need to be switched
-                subframe_BR2 = ceil(BR2/NbeaconsF);
-                subframe_BR2(subframe_BR2<=currentT) = subframe_BR2 + NbeaconsT;
+                % 필요한 경우 BR과 BR2를 교체할 수 있음
+                subframe_BR2 = ceil(BR2 / NbeaconsF);
+                subframe_BR2(subframe_BR2 <= currentT) = subframe_BR2 + NbeaconsT;
                 if subframe_BR2 < subframe_BR
-                    stationManagement.BRid(scheduledID(indexSensingV),1) = BR2;
+                    stationManagement.BRid(scheduledID(indexSensingV), 1) = BR2;
                     BR2 = BR;
+                    subframe_BR2 = subframe_BR; % 추가된 부분
                 end
             else
                 BR2 = -1;
             end
-            stationManagement.BRid(scheduledID(indexSensingV),2) = BR2;
-
+            stationManagement.BRid(scheduledID(indexSensingV), 2) = BR2;
         end
     end
+    
     if stationManagement.cv2xNumberOfReplicas(scheduledID(indexSensingV)) > 2
-        bestSubframe = ceil(bestBR/NbeaconsF);
-        bestSubframe(bestSubframe<=currentT) = bestSubframe(bestSubframe<=currentT) + NbeaconsT;
-        % identify subframe of BR
-        subframe_BR = ceil(BR/NbeaconsF);
-        subframe_BR(subframe_BR<=currentT) = subframe_BR + NbeaconsT;
-        % remove resources in subframe_x
-        bestBR(bestSubframe==subframe_BR) = -1;
-
-        % remove resources before Now+T1
-        bestBR(bestSubframe<currentT+simParams.T1autonomousModeTTIs) = -1;
-
+        bestSubframe = ceil(bestBR / NbeaconsF);
+        bestSubframe(bestSubframe <= currentT) = bestSubframe(bestSubframe <= currentT) + NbeaconsT;
+        % BR의 subframe 식별
+        subframe_BR = ceil(BR / NbeaconsF);
+        subframe_BR(subframe_BR <= currentT) = subframe_BR + NbeaconsT;
+        % subframe_x에서 자원 제거
+        bestBR(bestSubframe == subframe_BR) = -1;
+        
+        % 현재+T1 이전의 자원 제거
+        bestBR(bestSubframe < currentT + simParams.T1autonomousModeTTIs) = -1;
+        
         if simParams.mode5G == constants.MODE_LTE
-            % remove resources before x-15
-            bestBR(bestSubframe<subframe_BR-15) = -1;
-        else%if simParams.mode5G==constants.MODE_5G
-            % remove resources before x-31
-            bestBR(bestSubframe<subframe_BR-31) = -1;
+            % x-15 이전의 자원 제거
+            bestBR(bestSubframe < subframe_BR - 15) = -1;
+        else % if simParams.mode5G == constants.MODE_5G
+            % x-31 이전의 자원 제거
+            bestBR(bestSubframe < subframe_BR - 31) = -1;
         end
-
-        % remove resources after Now+T2
-        bestBR(bestSubframe>currentT+simParams.T2autonomousModeTTIs) = -1;
-
-        if simParams.mode5G==constants.MODE_LTE
-            % remove resources after x+15
-            bestBR(bestSubframe>subframe_BR+15) = -1;
-        else% if simParams.mode5G==constants.MODE_5G
-            % remove resources after x+31
-            bestBR(bestSubframe>subframe_BR+31) = -1;
+        
+        % 현재+T2 이후의 자원 제거
+        bestBR(bestSubframe > currentT + simParams.T2autonomousModeTTIs) = -1;
+        
+        if simParams.mode5G == constants.MODE_LTE
+            % x+15 이후의 자원 제거
+            bestBR(bestSubframe > subframe_BR + 15) = -1;
+        else % if simParams.mode5G == constants.MODE_5G
+            % x+31 이후의 자원 제거
+            bestBR(bestSubframe > subframe_BR + 31) = -1;
         end
-
-
-        bestBR(bestBR==-1) = [];
+        
+        bestBR(bestBR == -1) = [];
         if length(bestBR) > 1
             BRindex3 = randi(length(bestBR));
             BR3 = bestBR(BRindex3);
-
+            
             subframe_BR3 = ceil(BR3 / NbeaconsF);
             subframe_BR3(subframe_BR3 <= currentT) = subframe_BR3 + NbeaconsT;
-            if subframe_BR3 < subframe_BR
-                stationManagement.BRid(scheduledID(indexSensingV), 1) = BR3;
-                BR3 = BR;
+            
+            % 중복되지 않고 순서를 보장하기 위해 추가 검사
+            if subframe_BR3 <= subframe_BR2
+                bestBR(bestSubframe == subframe_BR2) = -1; % 중복 방지
+                bestBR(bestSubframe < subframe_BR2) = -1;  % 순서 보장
+                bestBR(bestBR == -1) = [];
+                if length(bestBR) > 0
+                    BRindex3 = randi(length(bestBR));
+                    BR3 = bestBR(BRindex3);
+                    subframe_BR3 = ceil(BR3 / NbeaconsF);
+                    subframe_BR3(subframe_BR3 <= currentT) = subframe_BR3 + NbeaconsT;
+                else
+                    BR3 = -1;
+                end
             end
         else
             BR3 = -1;
