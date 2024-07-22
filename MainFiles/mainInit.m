@@ -516,6 +516,7 @@ if ismember(constants.V_STATE_LTE_TXRX, stationManagement.vehicleState(stationMa
     
     % The channel busy ratio of C-V2X is initialized
     sinrManagement.cbrCV2X = zeros(simValues.maxID,1);
+    sinrManagement.cbrCV2X_ADT = zeros(simValues.maxID,1);
     sinrManagement.cbrCV2X_DENM = zeros(simValues.maxID,2);
     sinrManagement.cbrLTE_coexLTEonly = zeros(simValues.maxID,1);
     sinrManagement.sum_cbrCV2X = 0;

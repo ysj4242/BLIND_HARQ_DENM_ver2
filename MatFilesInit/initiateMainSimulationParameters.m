@@ -358,6 +358,10 @@ switch simParams.typeOfScenario
 end
 
 
+[simParams,varargin] = addNewParam(simParams,'ADT',false,'Adaptive DENM Transmission','bool',fileCfg,varargin{1});
+
+[simParams,varargin] = addNewParam(simParams,'ADT_thr',1,'ADT threshold','integer',fileCfg,varargin{1});
+
 % [neighborsSelection]
 % Choose whether to use significant neighbors selection
 [simParams,varargin] = addNewParam(simParams,'neighborsSelection',false,'If using significant neighbors selection','bool',fileCfg,varargin{1});
